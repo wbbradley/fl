@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -58,8 +60,8 @@ func initialModel(mutex *sync.Mutex, lines *[]string) model {
 	ti := textinput.NewModel()
 	ti.Placeholder = "filter for words..."
 	ti.Focus()
-	ti.CharLimit = 80
-	ti.Width = 80
+	ti.CharLimit = 1000
+	ti.Width = 120
 	// ti.BlinkSpeed = 1000000
 
 	return model{
@@ -98,6 +100,47 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func max(i, j int) int {
+	if i > j {
+		return i
+	} else {
+		return j
+	}
+}
+
+func min(i, j int) int {
+	if i < j {
+		return i
+	} else {
+		return j
+	}
+}
+
+var asciiSpace = [256]uint8{'\t': 1, '\n': 1, '\v': 1, '\f': 1, '\r': 1, ' ': 1}
+
+// TrimSpace returns a slice of the string s, with all leading
+// and trailing white space removed, as defined by Unicode.
+func trimTrailingSpace(s string) string {
+	// Fast path for ASCII: look for the first ASCII non-space byte
+	start := 0
+	// Now look for the first ASCII non-space byte from the end
+	stop := len(s)
+	for ; stop > start; stop-- {
+		c := s[stop-1]
+		if c >= utf8.RuneSelf {
+			return strings.TrimFunc(s[start:stop], unicode.IsSpace)
+		}
+		if asciiSpace[c] == 0 {
+			break
+		}
+	}
+
+	// At this point s[start:stop] starts and ends with an ASCII
+	// non-space bytes, so we're done. Non-ASCII cases have already
+	// been handled above.
+	return s[start:stop]
+}
+
 func (m model) View() string {
 	parts := make([]string, 0, m.viewport.Height)
 	rawfilter := strings.TrimSpace(m.textInput.Value())
@@ -132,7 +175,10 @@ outer:
 				continue outer
 			}
 		}
-		parts = append(parts, line)
+		parts = append(parts, strings.TrimSuffix(line[0:min(m.viewport.Width-1, len(line))], "\n"))
+	}
+	for len(parts) < m.viewport.Height-2 {
+		parts = append(parts, "")
 	}
 	// Reverse the filtered list
 	for i := 0; i < len(parts)/2; i += 1 {
