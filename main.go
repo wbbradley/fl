@@ -15,25 +15,27 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
-var ()
+var (
+	commentsStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#0C8C6C"))
+)
 
-func read(r io.Reader, mutex *sync.Mutex, lines *[]string) {
-	go func() {
-		scan := bufio.NewScanner(r)
-		for scan.Scan() {
-			mutex.Lock()
-			*lines = append(*lines, scan.Text())
-			mutex.Unlock()
-		}
-	}()
+func readLines(r io.Reader, mutex *sync.Mutex, lines *[]string) {
+	scan := bufio.NewScanner(r)
+	for scan.Scan() {
+		line := scan.Text()
+		mutex.Lock()
+		*lines = append(*lines, line)
+		mutex.Unlock()
+	}
 }
 
 func main() {
 	mutex := sync.Mutex{}
 	lines := make([]string, 0, 10000000)
-	read(os.Stdin, &mutex, &lines)
+	go readLines(os.Stdin, &mutex, &lines)
 	p := tea.NewProgram(initialModel(&mutex, &lines), tea.WithAltScreen())
 
 	if err := p.Start(); err != nil {
@@ -138,11 +140,13 @@ outer:
 	}
 	parts = append(parts, m.textInput.View())
 	parts = append(parts,
-		strings.Join(
-			[]string{
-				"Including: [",
-				strings.Join(filters, ", "),
-				"], Excluding: (use ! prefix) [",
-				strings.Join(negativeFilters, ", "), "], Total Lines: ", fmt.Sprintf("%d", len(*m.lines))}, ""))
+		commentsStyle.Render(
+			strings.Join(
+				[]string{
+					"Including: [",
+					strings.Join(filters, ", "),
+					"], Excluding: [",
+					strings.Join(negativeFilters, ", "), "], Total Lines: ", fmt.Sprintf("%d", len(*m.lines)), " (exclude with !term)"}, "")))
+
 	return strings.Join(parts, "\n")
 }
