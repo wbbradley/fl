@@ -1,4 +1,4 @@
-module wbbradley.com/nkd
+module github.com/wbbradley/fl
 
 go 1.17
 
